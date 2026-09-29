@@ -1,0 +1,2 @@
+yamlstar==0.1.21
+yamlstar-plugin-json-comments==0.1.8

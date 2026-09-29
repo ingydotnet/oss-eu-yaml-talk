@@ -1,0 +1,496 @@
+#!/usr/bin/env ys-0
+
+!ys-0
+
+use:
+  ys::fs: :as fs
+  ys::yaml: :as yaml
+
+BLOCK-RE =: /(?m)^----[ \t]*/
+URL-RE =: /https?:\/\/[^\s<]+/
+CENTER-MARK =: "\uE000"
+
+DEFAULT-CONFIG =::
+  title: Vroom Slides
+  indent: 0
+  height: 24
+  width: 80
+  before: 1
+
+defn main(input='slides.vroom', output='slides/index.html'):
+  source =: read(input).replace(/\r\n?/ "\n")
+  config slides count =: compile-deck(source)
+  directory =: fs/dirname(output)
+  fs/mkdir-p: directory
+  temporary =: "$output.tmp"
+  write temporary: page-html(config slides count)
+  fs/rm-f: output
+  fs/mv: temporary output
+  write "$directory/.nojekyll": ''
+  say: "Generated $output"
+
+defn compile-deck(source):
+  blocks =: source.split(BLOCK-RE).drop(1)
+  when blocks.!:
+    die: 'No Vroom slides found'
+  loop blocks blocks, config DEFAULT-CONFIG, slides [], number 0:
+    if blocks.!:
+      then: :[config slides number]
+      else:
+        block =: blocks.0 =~ /(?s)^([^\n]*)\n(.*)\z/
+        when block.!:
+          die: "Malformed Vroom slide block: $(pr-str(blocks.0))"
+        options =: trim(block.1)
+        body =: block.2
+        if options == 'config':
+          then:
+            recur:
+              blocks:rest
+              merge(config yaml/load(body))
+              slides
+              number
+          else:
+            flags =: parse-options(options)
+            if flags.skip:
+              then: recur(blocks:rest, config, slides, number)
+              else:
+                number =: number.++
+                states =: slide-states(body config flags number)
+                recur:
+                  blocks:rest
+                  config
+                  into(slides states)
+                  number
+
+defn parse-options(text):
+  options =:
+    if text.!: +
+      []
+      text.split(/\s*,\s*/)
+  allowed =: set(qw(center replace skip))
+  unknown =: options.remove(\(allowed-option?(_ allowed)))
+  when unknown.?:
+    die: "Unsupported Vroom option: $(unknown:first)"
+  =>::
+    center:: some(\(_ == 'center') options).??
+    replace:: some(\(_ == 'replace') options).??
+    skip:: some(\(_ == 'skip') options).??
+    indent:: option-number(options /^i(\d+)$/)
+    undent:: option-number(options /^i-(\d+)$/)
+
+defn allowed-option?(option allowed):
+  allowed(option) || (option =~ /^i-?\d+$/)
+
+defn option-number(options pattern):
+  some(\(matched-number(_ pattern)) options)
+
+defn matched-number(option pattern):
+  match =: option =~ pattern
+  when match.?:
+    N(match.1)
+
+defn slide-states(body config flags number):
+  clean-body =: strip-notes(body)
+  formatted =: format-slide(clean-body config flags)
+  parts =: formatted.split(/(?m)^\+/)
+  states =:
+    if flags.replace:
+      then: parts
+      else: reductions(append-text parts)
+  steps =: states.#
+  mapper =: partial(make-state number steps config flags)
+  result =: states.map-indexed(mapper _)
+  =>: result
+
+defn append-text(left right):
+  =>: "$left$right"
+
+defn make-state(number steps config flags step state):
+  =>::
+    number:: number
+    step:: step
+    steps:: steps
+    content:: finish-slide(state config flags)
+
+defn strip-notes(body):
+  clean =: body.replace(/(?ms)^====\n.*\z/ '')
+               .replace(/(?m)^%\s*.*\n/ '')
+  =>: clean
+
+defn format-slide(body config flags):
+  indent =:
+    if flags.indent == nil:
+      then: N(config.indent || 0)
+      else: flags.indent
+  formatted-lines =:
+    lines(body).map(\(format-line(_, config, flags, indent)))
+  formatted =: formatted-lines.join("\n")
+  =>: formatted
+
+defn format-line(line config flags indent):
+  transition =: line.starts?('+')
+  text =: if(transition.??, subs(line 1), line)
+  prefix =: if(transition.??, '+', '')
+  if flags.center:
+    then:
+      trimmed =: trim(text)
+      if trimmed.!:
+        then: prefix
+        else: "$prefix$CENTER-MARK$trimmed"
+    else: "$prefix$(spaces(indent))$text"
+
+defn finish-slide(text config flags):
+  trimmed =: trim-slide(text)
+  finished =:
+    if flags.undent == nil:
+      then: trimmed
+      else:
+        trimmed.replace(
+          re-pattern("(?m)^.{$(flags.undent)}") '')
+  before =: N(config.before || 1)
+  newline =: "\n"
+  padding =: newline.repeat(before).join('')
+  =>: "$padding$finished"
+
+defn trim-slide(text):
+  clean =: text.replace(/\A\s*\n/ '')
+               .replace(/\n\s*\z/ '')
+               .replace(/(?m)[ ]+$/ '')
+  =>: clean
+
+defn spaces(count):
+  space =: ' '
+  result =: space.repeat(count).join('')
+  =>: result
+
+defn page-html(config slides count):
+  sections =: slides.map(render-slide).join("\n")
+  title =: html-escape(str(config.title))
+  width =: N(config.width || 80)
+  height =: N(config.height || 24)
+  =>: |
+    <!doctype html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport"
+            content="width=device-width, initial-scale=1">
+      <meta name="theme-color" content="#300a24">
+      <title>$title</title>
+      <style>
+    $(indent-text(page-css(width height) 4))
+      </style>
+    </head>
+    <body>
+      <main aria-live="polite">
+    $sections
+      </main>
+      <aside id="navigation" aria-label="Slideshow controls">
+        <span class="full-navigation">
+          Space or click: next · Backspace or ←: previous
+        </span>
+        <span class="compact-navigation">
+          click: next
+          <button id="previous" type="button"
+                  aria-label="Previous slide" title="Previous slide">
+            [back]
+          </button>
+        </span>
+      </aside>
+      <a id="repository"
+         href="https://github.com/ingydotnet/oss-eu-yaml-talk"
+         target="_blank" rel="noopener"
+         aria-label="View this talk on GitHub"
+         title="View this talk on GitHub">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53
+                   5.47 7.59.4.07.55-.17.55-.38
+                   0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49
+                   -2.69-.94-.09-.23-.48-.94-.82-1.13
+                   -.28-.15-.68-.52-.01-.53.63-.01 1.08.58
+                   1.23.82.72 1.21 1.87.87 2.33.66.07-.52
+                   .28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95
+                   0-.87.31-1.59.82-2.15-.08-.2-.36-1.02
+                   .08-2.12 0 0 .67-.21 2.2.82A7.65 7.65 0 0 1
+                   8 3.55c.68 0 1.36.09 2 .26 1.53-1.04
+                   2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12
+                   .51.56.82 1.27.82 2.15 0 3.07-1.87 3.75
+                   -3.65 3.95.29.25.54.73.54 1.48
+                   0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38
+                   A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/>
+        </svg>
+      </a>
+      <output id="counter" aria-label="Slide number"></output>
+      <script>
+    $(indent-text(page-js(count) 4))
+      </script>
+    </body>
+    </html>
+
+defn indent-text(text count):
+  indented =: text.replace(/(?m)^/ spaces(count))
+  =>: indented
+
+defn render-slide(slide):
+  content =: lines(slide.content).map(render-line).join('')
+  number =: slide.number
+  step =: slide.step
+  steps =: slide.steps
+  =>: |
+    <section class="slide" data-slide="$number" data-step="$step"
+             data-steps="$steps" hidden>
+      <pre>$content</pre>
+    </section>
+
+defn render-line(line):
+  centered =: line.starts?(CENTER-MARK)
+  raw =: if(centered.??, subs(line 1), line)
+  match =: raw =~ /^([ ]*)(.*)$/
+  indent =: match.1.#
+  unindented =: match.2
+  heading =: unindented.starts?('== ')
+  visible =:
+    if heading:
+      then: unindented.replace(/^==\s+/ '')
+      else: unindented
+  kind =:
+    cond:
+      centered: 'centered'
+      heading: 'heading'
+      trim(visible) =~ /^[\$>]\s/: 'command'
+      true: ''
+  classes =: if(kind.!, 'line', "line $kind")
+  text =: html-escape(visible).replace(URL-RE link-url)
+  =>: |-
+    <span class="$classes" style="--indent: $indent">$text</span>
+
+defn link-url(url):
+  =>: |-
+    <a href="$url" target="_blank" rel="noopener">$url</a>
+
+defn html-escape(text):
+  escaped =: text.replace('&' '&amp;')
+                 .replace('<' '&lt;')
+                 .replace('>' '&gt;')
+                 .replace('"' '&quot;')
+  =>: escaped
+
+defn page-css(width height):
+  =>: |
+    :root {
+      color-scheme: dark;
+      --columns: $width;
+      --rows: $height;
+      --background: #300a24;
+      --foreground: #f7f7f7;
+      --command: #d7a900;
+      --link: #35c9ff;
+    }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; }
+    body {
+      overflow: hidden;
+      background: var(--background);
+      color: var(--foreground);
+      font-family: "Ubuntu Mono", "DejaVu Sans Mono", monospace;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    main { width: 100%; height: 100%; }
+    .slide {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .slide[hidden] { display: none; }
+    pre {
+      width: calc(var(--columns) * 1ch);
+      height: calc(var(--rows) * 1.2em);
+      margin: 0;
+      font: inherit;
+      font-size: min(calc(94vw / var(--columns) * 1.65),
+                     calc(76vh / var(--rows)));
+      line-height: 1.2;
+      white-space: pre;
+    }
+    .line {
+      display: block;
+      min-height: 1.2em;
+      padding-left: calc(var(--indent) * 1ch);
+    }
+    .command { color: var(--command); }
+    .heading, .centered {
+      padding-left: 0;
+      text-align: center;
+    }
+    a { color: var(--link); text-decoration: none; }
+    a:hover, a:focus { text-decoration: underline; }
+    #counter {
+      position: fixed;
+      right: 1rem;
+      bottom: .6rem;
+      color: #bdaebb;
+      font: 14px "Ubuntu Mono", monospace;
+    }
+    #navigation {
+      position: fixed;
+      left: 50%;
+      bottom: .6rem;
+      transform: translateX(-50%);
+      color: #bdaebb;
+      font: 14px "Ubuntu Mono", monospace;
+      white-space: nowrap;
+    }
+    #previous {
+      display: none;
+      min-width: 44px;
+      min-height: 44px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+      opacity: .8;
+    }
+    #previous:disabled { cursor: default; opacity: .25; }
+    #previous:not(:disabled):hover,
+    #previous:not(:disabled):focus { opacity: 1; }
+    #repository {
+      position: fixed;
+      left: 1rem;
+      bottom: .55rem;
+      width: 18px;
+      height: 18px;
+      color: #bdaebb;
+      opacity: .55;
+    }
+    #repository svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+      fill: currentColor;
+    }
+    #repository:hover, #repository:focus {
+      opacity: 1;
+      text-decoration: none;
+    }
+    .compact-navigation {
+      display: none;
+      position: relative;
+    }
+    @media (max-width: 600px),
+           (hover: none) and (pointer: coarse) and (max-width: 1000px) {
+      .slide { padding-bottom: 3rem; }
+      #navigation {
+        left: 1rem;
+        transform: none;
+        font-size: 12px;
+      }
+      #counter { font-size: 12px; }
+      #repository, .full-navigation { display: none; }
+      #previous {
+        display: inline-flex;
+        position: absolute;
+        left: calc(100% + .5rem);
+        bottom: -.6rem;
+        align-items: flex-end;
+        padding-bottom: .6rem;
+        box-sizing: border-box;
+      }
+      .compact-navigation {
+        display: inline-block;
+      }
+    }
+    @media (max-width: 600px) and (orientation: portrait) {
+      .slide { padding: 1rem 0 3rem; }
+      pre {
+        width: 92vw;
+        height: auto;
+        max-height: calc(100vh - 5rem);
+        overflow-y: auto;
+        overflow-wrap: anywhere;
+        font-size: clamp(12px, 3vw, 15px);
+        white-space: pre-wrap;
+      }
+    }
+    @media print {
+      body { overflow: visible; }
+      .slide { break-after: page; height: 100vh; }
+      .slide[hidden] { display: grid; }
+      #counter, #navigation, #repository, #previous { display: none; }
+    }
+
+defn page-js(count):
+  =>: |
+    "use strict";
+    const frames = [...document.querySelectorAll(".slide")];
+    const counter = document.querySelector("#counter");
+    const previous = document.querySelector("#previous");
+    let index = 0;
+
+    function hashFor(frame) {
+      return "#" + frame.dataset.slide + "." +
+        (Number(frame.dataset.step) + 1);
+    }
+
+    function indexFromHash() {
+      const match = location.hash.match(/^#(\d+)\.(\d+)$/);
+      if (!match) return 0;
+      const found = frames.findIndex(frame =>
+        frame.dataset.slide === match[1] &&
+        Number(frame.dataset.step) + 1 === Number(match[2]));
+      return found < 0 ? 0 : found;
+    }
+
+    function show(next, updateHash = true) {
+      index = Math.max(0, Math.min(frames.length + -1, next));
+      frames.forEach((frame, position) => {
+        frame.hidden = position !== index;
+      });
+      const frame = frames[index];
+      counter.value = frame.dataset.slide + " / $count";
+      previous.disabled = index === 0;
+      if (updateHash && location.hash !== hashFor(frame)) {
+        history.replaceState(null, "", hashFor(frame));
+      }
+    }
+
+    function move(amount) { show(index + amount); }
+
+    addEventListener("keydown", event => {
+      const forward = [" ", "Enter", "ArrowRight", "ArrowDown",
+                       "PageDown"];
+      const backward = ["Backspace", "ArrowLeft", "ArrowUp", "PageUp"];
+      if (forward.includes(event.key)) {
+        event["preventDefault"]();
+        move(1);
+      } else if (backward.includes(event.key)) {
+        event["preventDefault"]();
+        move(-1);
+      } else if (event.key === "Home") {
+        event["preventDefault"]();
+        show(0);
+      } else if (event.key === "End") {
+        event["preventDefault"]();
+        show(frames.length + -1);
+      }
+    });
+
+    const tapEvent = "PointerEvent" in window ? "pointerup" : "click";
+    frames.forEach(frame => frame.addEventListener(tapEvent, event => {
+      if (event.target.closest("a")) return;
+      if ("button" in event && event.button !== 0) return;
+      move(1);
+    }));
+    previous.addEventListener("click", event => {
+      event["preventDefault"]();
+      event["stopPropagation"]();
+      move(-1);
+    });
+    addEventListener("hashchange", () => show(indexFromHash(), false));
+    show(indexFromHash());

@@ -1,0 +1,4 @@
+speaker: *SPEAKER
+settings:
+  <<: *defaults
+  size: 5

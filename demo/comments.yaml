@@ -1,0 +1,5 @@
+{
+  // Kept by people, ignored by machines.
+  "service": "yaml-api",
+  "replicas": 6 /* Scale for the conference demo. */
+}

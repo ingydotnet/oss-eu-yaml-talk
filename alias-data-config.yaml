@@ -1,0 +1,8 @@
+plugin:
+  alias-data:
+    data:
+      defaults:
+        color: blue
+        size: 3
+    env:
+    - SPEAKER

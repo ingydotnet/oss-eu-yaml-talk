@@ -1,0 +1,159 @@
+use strict;
+use warnings;
+
+my $file = shift or die "Usage: $0 FILE\n";
+
+open my $fh, '<:encoding(UTF-8)', $file
+    or die "Can't open '$file': $!\n";
+local $/;
+my $html = <$fh>;
+close $fh or die "Can't close '$file': $!\n";
+my $repository = 'https://github.com/ingydotnet/oss-eu-yaml-talk';
+my $slide_heading =
+    '<span class="line heading" style="--indent: 5">'
+    . 'Yes, this is vim!</span>';
+my $repository_style = qr!
+    [#]repository \s+ \{
+    [^}]* left: \s+ 1rem;
+    [^}]* opacity: \s+ [. ]55;
+!x;
+my $previous_style = qr!
+    [#]previous \s+ \{
+    [^}]* min-width: \s+ 44px;
+    [^}]* min-height: \s+ 44px;
+!x;
+
+sub check {
+    my ($condition, $message) = @_;
+    die "not ok - $message\n" unless $condition;
+    print "ok - $message\n";
+}
+
+check(
+    $html =~ m{<title>Evolving the YAML Family},
+    'deck title is present',
+);
+check(
+    $html =~ m{data-slide="2" data-step="9"},
+    'incremental reveal states are present',
+);
+check(
+    $html !~ m{Compile ysd to ysdc form},
+    'skipped slides are absent',
+);
+check(
+    $html =~ m{<span class="line command"[^>]*>.*\$ go-yaml --help</span>},
+    'command lines are styled',
+);
+check(
+    index(
+        $html,
+        $slide_heading
+            . '<span class="line" style="--indent: 0"></span>',
+    ) >= 0,
+    'a blank line follows slide titles',
+);
+check(
+    index(
+        $html,
+        '<span class="line centered" style="--indent: 0">'
+            . 'Evolving the YAML Family</span>',
+    ) >= 0,
+    'centered slides do not rely on padding characters',
+);
+check(
+    index(
+        $html,
+        'class="line" style="--indent: 5">'
+            . '* Who has written software that uses a YAML library?'
+            . '</span>',
+    ) >= 0,
+    'wrapped lines retain their terminal indentation',
+);
+check(
+    $html =~ m{<a href="https://yaml[.]org/libraries/"[^>]*>},
+    'URLs are linked',
+);
+check(
+    $html =~ m{\$ &lt;&lt;&lt;},
+    'shell syntax is HTML escaped',
+);
+check(
+    $html =~ m{Space or click: next .* Backspace or .*: previous}s,
+    'navigation instructions are visible',
+);
+check(
+    index($html, '<span class="compact-navigation">') >= 0
+        && index($html, 'click: next') >= 0
+        && index($html, '[back]') >= 0,
+    'compact navigation instructions are present',
+);
+check(
+    index($html, '<button id="previous" type="button"') >= 0
+        && index($html, 'aria-label="Previous slide"') >= 0,
+    'mobile previous control is accessible',
+);
+check(
+    scalar($html =~ $previous_style)
+        && index($html, 'display: inline-flex;') >= 0
+        && index($html, 'position: absolute;') >= 0
+        && index($html, 'bottom: -.6rem;') >= 0,
+    'mobile previous control has a full touch target',
+);
+check(
+    index($html, '@media (max-width: 600px),') >= 0
+        && index($html, '(hover: none) and (pointer: coarse)') >= 0
+        && index($html, 'and (max-width: 1000px)') >= 0
+        && index($html, 'left: 1rem;') >= 0
+        && index($html, 'transform: none;') >= 0,
+    'compact footer covers narrow browsers and phone orientations',
+);
+check(
+    index($html, '<a id="repository"') >= 0
+        && index($html, qq{href="$repository"}) >= 0,
+    'GitHub repository link is present',
+);
+check(
+    scalar($html =~ $repository_style),
+    'GitHub repository link is discreetly positioned',
+);
+check(
+    index(
+        $html,
+        'const tapEvent = "PointerEvent" in window ? '
+            . '"pointerup" : "click";',
+    ) >= 0,
+    'pointer navigation has a click fallback',
+);
+check(
+    index(
+        $html,
+        'frames.forEach(frame => frame.addEventListener(tapEvent,',
+    ) >= 0,
+    'tap navigation is attached directly to slides',
+);
+check(
+    index($html, 'previous.disabled = index === 0;') >= 0
+        && index($html, 'previous.addEventListener("click",') >= 0
+        && index($html, 'move(-1);') >= 0,
+    'mobile previous control moves back and disables at the start',
+);
+check(
+    index($html, '@media (max-width: 600px)') >= 0
+        && index($html, 'and (orientation: portrait)') >= 0
+        && index($html, 'font-size: clamp(12px, 3vw, 15px);') >= 0,
+    'portrait mode uses readable slide text',
+);
+check(
+    $html =~ m{user-select: none;.*?touch-action: manipulation;}s,
+    'rapid taps do not select slide text',
+);
+check(
+    $html !~ m{\(\\[*] \\space},
+    'reveal text remains text',
+);
+
+my @frames = $html =~ m{<section class="slide"}g;
+check(@frames > 40, 'the complete deck was generated');
+
+print "All slideshow checks passed\n";

@@ -1,0 +1,4 @@
+!ys-0
+defaults =: load('defaults.yaml')
+production =: load('production.yaml')
+merge: defaults production

@@ -1,0 +1,7 @@
+--- &defaults
+color: blue
+size: 3
+---
+settings:
+  <<: *defaults
+  size: 5

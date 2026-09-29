@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+
+set -u
+
+file=$1
+line_number=$2
+line=$(LINE_NUMBER=$line_number perl -ne \
+  'print if $. == $ENV{LINE_NUMBER}' "$file")
+
+shopt -s extglob
+line=${line##+([[:space:]])}
+line=${line#\* }
+
+clear
+
+if [[ $line == https://* ]]; then
+  if [[ $OSTYPE == darwin* ]]; then
+    open "$line"
+  else
+    xdg-open "$line" &>/dev/null &
+  fi
+  exit
+fi
+
+if [[ $line != \$\ * && $line != \>\ * ]]; then
+  exit
+fi
+
+live=false
+if [[ $line == \>\ * ]]; then
+  live=true
+  line=${line#> }
+else
+  line=${line#\$ }
+fi
+
+if [[ $line == vim\ * ]]; then
+  line=${line#vim }
+  # Vroom examples intentionally use simple space-separated file names.
+  read -ra files <<<"$line"
+  vim --not-a-term -S vimrc2 +1 "${files[@]}"
+  exit
+fi
+
+run_command() {
+  if [[ $line == *in-1* ]]; then
+    # shellcheck disable=SC1090
+    source <(in-1 --rc)
+    eval "$line"
+  else
+    bash -c "$line"
+  fi
+}
+
+echo
+echo
+
+if $live; then
+  printf '+%s\n' "$line"
+  run_command </dev/tty
+  printf '\nE\r'
+  read -r < /dev/tty
+  exit
+fi
+
+text=$(run_command </dev/tty 2>&1)
+text=$(printf '+%s\n%s' "$line" "$text")
+lines=$(perl -ne 'END { print $. }' <<<"$text")
+terminal_lines=$(tput lines)
+
+if ((lines >= terminal_lines)); then
+  printf '%s\n' "$text" | less
+else
+  printf '%s\n' "$text"
+  printf '\nE\r'
+  read -r < /dev/tty
+fi

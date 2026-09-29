@@ -1,0 +1,12 @@
+.cache/
+.vroom/
+slides/
+*.html
+/.help
+/.vimrc
+/[0-9][0-9][0-9]
+/go-yaml/
+!/alias-data-config.yaml
+!/alias-data.yaml
+!/alias-stream.yaml
+!/tab-indent.yaml

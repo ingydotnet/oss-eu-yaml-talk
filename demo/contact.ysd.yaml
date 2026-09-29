@@ -1,0 +1,4 @@
+--: Contact
+name: +Str 1-80
+email: +Str ~"[^@]+@[^@]+"
+team?: +Str

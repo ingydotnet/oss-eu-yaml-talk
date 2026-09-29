@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+tmp_dir=$(mktemp -d)
+trap 'rm -rf "$tmp_dir"' EXIT
+
+ys -Y demo/config.ys > "$tmp_dir/config.yaml"
+perl -0777 -ne 'exit 1 unless /replicas: 6/ && /log-level: warn/' \
+  "$tmp_dir/config.yaml"
+
+ysd -t jsc demo/contact.ysd.yaml > "$tmp_dir/contact.schema.json"
+perl -0777 -ne 'exit 1 unless /"Contact"/ && /"required"/' \
+  "$tmp_dir/contact.schema.json"
+
+env -u GOROOT make -C go-yaml cli >/dev/null
+
+printf 'a: b\n' |
+  yaml -N |
+  go-yaml -Y > "$tmp_dir/round-trip.yaml"
+perl -0777 -ne 'exit 1 unless /a: b/' "$tmp_dir/round-trip.yaml"
+
+printf 'a: b\n' |
+  go-yaml -N |
+  yaml -Y > "$tmp_dir/round-trip-back.yaml"
+perl -0777 -ne 'exit 1 unless /a: b/' \
+  "$tmp_dir/round-trip-back.yaml"
+
+go-yaml-plugins --plugin=parser=reference@0.2.5 \
+  -y demo/reference.yaml > "$tmp_dir/reference.yaml"
+perl -0777 -ne 'exit 1 unless /another parser/' \
+  "$tmp_dir/reference.yaml"
+
+go-yaml-plugins --plugin=json-comments \
+  -j demo/comments.yaml > "$tmp_dir/comments.json"
+perl -0777 -ne 'exit 1 unless /"replicas":6/' \
+  "$tmp_dir/comments.json"
+
+if printf '{ : }\n' | go-yaml -Y >/dev/null 2>&1; then
+  echo 'Native go-yaml unexpectedly accepted YAML test NKF9' >&2
+  exit 1
+fi
+
+env -u GOROOT make -C go-yaml cli \
+  PLUGIN=parser=reference@v0.2.5 >/dev/null
+printf '{ : }\n' |
+  go-yaml --plugin=parser=reference@0.2.5 \
+    -Y > "$tmp_dir/reference-parser.yaml"
+perl -0777 -ne "exit 1 unless /^\{'': ''\}\s*$/" \
+  "$tmp_dir/reference-parser.yaml"
+
+if printf '{ : }\n' |
+  yaml --plugin=parser=go-yaml -Y >/dev/null 2>&1; then
+  echo 'YAMLStar go-yaml parser unexpectedly accepted test NKF9' >&2
+  exit 1
+fi
+printf '{ : }\n' |
+  yaml --plugin=parser=reference -Y > \
+    "$tmp_dir/yamlstar-reference-parser.yaml"
+perl -0777 -ne "exit 1 unless /^\{'': ''\}\s*$/" \
+  "$tmp_dir/yamlstar-reference-parser.yaml"
+
+yaml --plugin=parser=toml -y settings.toml > \
+  "$tmp_dir/yamlstar-toml.yaml"
+perl -0777 -ne \
+  'exit 1 unless /title: Evolving/ && /year: 2026/ && /parser: toml/' \
+  "$tmp_dir/yamlstar-toml.yaml"
+
+env -u GOROOT make -C go-yaml cli \
+  PLUGIN=parser=toml@v0.1.0 >/dev/null
+go-yaml --plugin=parser=toml@0.1.0 -y settings.toml > \
+  "$tmp_dir/go-yaml-toml.yaml"
+perl -0777 -ne \
+  'exit 1 unless /title: Evolving/ && /year: 2026/ && /parser: toml/' \
+  "$tmp_dir/go-yaml-toml.yaml"
+
+env -u GOROOT make -C go-yaml cli >/dev/null
+
+SPEAKER=Ingy yaml --config=alias-data-config.yaml \
+  -y alias-data.yaml > "$tmp_dir/yamlstar-alias-data.yaml"
+perl -0777 -ne \
+  'exit 1 unless /speaker: Ingy/ && /color: blue/ && /size: 5/' \
+  "$tmp_dir/yamlstar-alias-data.yaml"
+
+SPEAKER=Ingy go-yaml --config=alias-data-config.yaml \
+  -y alias-data.yaml > "$tmp_dir/go-yaml-alias-data.yaml"
+perl -0777 -ne \
+  'exit 1 unless /speaker: Ingy/ && /color: blue/ && /size: 5/' \
+  "$tmp_dir/go-yaml-alias-data.yaml"
+
+if yaml -y alias-stream.yaml >/dev/null 2>&1; then
+  echo 'YAMLStar unexpectedly accepted a cross-document alias' >&2
+  exit 1
+fi
+if go-yaml -y alias-stream.yaml >/dev/null 2>&1; then
+  echo 'go-yaml unexpectedly accepted a cross-document alias' >&2
+  exit 1
+fi
+
+yaml --plugin=alias-data -y alias-stream.yaml > \
+  "$tmp_dir/yamlstar-alias-stream.yaml"
+perl -0777 -ne 'exit 1 unless /color: blue/ && /size: 5/' \
+  "$tmp_dir/yamlstar-alias-stream.yaml"
+
+go-yaml --plugin=alias-data -y alias-stream.yaml > \
+  "$tmp_dir/go-yaml-alias-stream.yaml"
+perl -0777 -ne 'exit 1 unless /color: blue/ && /size: 5/' \
+  "$tmp_dir/go-yaml-alias-stream.yaml"
+
+env -u GOROOT make -C go-yaml cli PLUGIN=json-comments >/dev/null
+go-yaml -Y json-comments.yaml > \
+  "$tmp_dir/go-yaml-json-comments.yaml"
+perl -0777 -ne 'exit 1 unless /project: YAML/ && /age: 25/' \
+  "$tmp_dir/go-yaml-json-comments.yaml"
+
+yaml --plugin=json-comments -Y json-comments.yaml > \
+  "$tmp_dir/yamlstar-json-comments.yaml"
+perl -0777 -ne 'exit 1 unless /project: YAML/ && /age: 25/' \
+  "$tmp_dir/yamlstar-json-comments.yaml"
+
+python json-comments.py > "$tmp_dir/python-json-comments.txt"
+perl -0777 -ne 'exit 1 unless /project.*YAML/s && /age.*25/s' \
+  "$tmp_dir/python-json-comments.txt"
+
+env -u GOROOT make -C go-yaml cli PLUGIN=tab-indent >/dev/null
+go-yaml --plugin=tab-indent -J tab-indent.yaml > \
+  "$tmp_dir/tab-indent.json"
+perl -0777 -ne 'exit 1 unless /Evolving the YAML Family/' \
+  "$tmp_dir/tab-indent.json"
+
+go-yaml --plugin=tab-indent -Y tab-indent.yaml > \
+  "$tmp_dir/tab-indent.yaml"
+perl -0777 -ne 'exit 1 unless /\ttitle: Evolving/' \
+  "$tmp_dir/tab-indent.yaml"
+
+yaml --plugin=tab-indent -Y tab-indent.yaml > \
+  "$tmp_dir/yamlstar-tab-indent.yaml"
+perl -0777 -ne 'exit 1 unless /\ttitle: Evolving/' \
+  "$tmp_dir/yamlstar-tab-indent.yaml"
+
+echo 'Demo checks passed'

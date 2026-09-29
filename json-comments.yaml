@@ -1,0 +1,20 @@
+// Comments for humans,
+// ignored by YAML loaders.
+project: YAML
+age: 25 /* years */
+plugins:
+- go-yaml
+- YAMLStar // Another JSON-style comment.
+# normal yaml comments work too
+edge cases:
+- abc// NOT a comment
+- abc // comment
+- true// comment
+- 42// comment
+- null// comment
+- foo/* NOT a comment */bar
+- foo /* comment but buggy */bar
+- http://yaml.org
+
+
+

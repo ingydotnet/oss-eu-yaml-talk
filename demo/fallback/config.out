@@ -1,0 +1,3 @@
+service: yaml-api
+replicas: 6
+log-level: warn
