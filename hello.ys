@@ -1,0 +1,9 @@
+!ys-0
+
+names =::
+- world
+- Prague
+- my friends
+
+each name names:
+  say: "Hello, $name!"

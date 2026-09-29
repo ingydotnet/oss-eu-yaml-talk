@@ -1,0 +1,7 @@
+title = "Evolving the YAML Family"
+year = 2026
+speakers = ["Ingy"]
+
+[plugin]
+parser = "toml"
+version = "0.1.0"

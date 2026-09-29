@@ -1,0 +1,371 @@
+#!/usr/bin/env ys-0
+
+!ys-0
+
+use:
+  ys::fs: :as fs
+  ys::yaml: :as yaml
+
+BLOCK-RE =: /(?m)^----[ \t]*/
+URL-RE =: /https?:\/\/[^\s<]+/
+
+DEFAULT-CONFIG =::
+  title: Vroom Slides
+  indent: 0
+  height: 24
+  width: 80
+  before: 1
+
+defn main(input='slides.vroom', output='slides/index.html'):
+  source =: read(input).replace(/\r\n?/ "\n")
+  config slides count =: compile-deck(source)
+  directory =: fs/dirname(output)
+  fs/mkdir-p: directory
+  temporary =: "$output.tmp"
+  write temporary: page-html(config slides count)
+  fs/rm-f: output
+  fs/mv: temporary output
+  write "$directory/.nojekyll": ''
+  say: "Generated $output"
+
+defn compile-deck(source):
+  blocks =: source.split(BLOCK-RE).drop(1)
+  when blocks.!:
+    die: 'No Vroom slides found'
+  loop blocks blocks, config DEFAULT-CONFIG, slides [], number 0:
+    if blocks.!:
+      then: :[config slides number]
+      else:
+        block =: blocks.0 =~ /(?s)^([^\n]*)\n(.*)\z/
+        when block.!:
+          die: "Malformed Vroom slide block: $(pr-str(blocks.0))"
+        options =: trim(block.1)
+        body =: block.2
+        if options == 'config':
+          then:
+            recur:
+              blocks:rest
+              merge(config yaml/load(body))
+              slides
+              number
+          else:
+            flags =: parse-options(options)
+            if flags.skip:
+              then: recur(blocks:rest, config, slides, number)
+              else:
+                number =: number.++
+                states =: slide-states(body config flags number)
+                recur:
+                  blocks:rest
+                  config
+                  into(slides states)
+                  number
+
+defn parse-options(text):
+  options =:
+    if text.!: +
+      []
+      text.split(/\s*,\s*/)
+  allowed =: set(qw(center replace skip))
+  unknown =: options.remove(\(allowed-option?(_ allowed)))
+  when unknown.?:
+    die: "Unsupported Vroom option: $(unknown:first)"
+  =>::
+    center:: some(\(_ == 'center') options).??
+    replace:: some(\(_ == 'replace') options).??
+    skip:: some(\(_ == 'skip') options).??
+    indent:: option-number(options /^i(\d+)$/)
+    undent:: option-number(options /^i-(\d+)$/)
+
+defn allowed-option?(option allowed):
+  allowed(option) || (option =~ /^i-?\d+$/)
+
+defn option-number(options pattern):
+  some(\(matched-number(_ pattern)) options)
+
+defn matched-number(option pattern):
+  match =: option =~ pattern
+  when match.?:
+    N(match.1)
+
+defn slide-states(body config flags number):
+  clean-body =: strip-notes(body)
+  formatted =: format-slide(clean-body config flags)
+  parts =: formatted.split(/(?m)^\+/)
+  states =:
+    if flags.replace:
+      then: parts
+      else: reductions(append-text parts)
+  steps =: states.#
+  mapper =: partial(make-state number steps config flags)
+  result =: states.map-indexed(mapper _)
+  =>: result
+
+defn append-text(left right):
+  =>: "$left$right"
+
+defn make-state(number steps config flags step state):
+  =>::
+    number:: number
+    step:: step
+    steps:: steps
+    content:: finish-slide(state config flags)
+
+defn strip-notes(body):
+  clean =: body.replace(/(?ms)^====\n.*\z/ '')
+               .replace(/(?m)^%\s*.*\n/ '')
+  =>: clean
+
+defn format-slide(body config flags):
+  indent =:
+    if flags.indent == nil:
+      then: N(config.indent || 0)
+      else: flags.indent
+  formatted-lines =:
+    lines(body).map(\(format-line(_, config, flags, indent)))
+  formatted =: formatted-lines.join("\n")
+  =>: formatted
+
+defn format-line(line config flags indent):
+  transition =: line.starts?('+')
+  text =: if(transition.??, subs(line 1), line)
+  prefix =: if(transition.??, '+', '')
+  if flags.center:
+    then:
+      trimmed =: trim(text)
+      if trimmed.!:
+        then: prefix
+        else:
+          "$prefix$(spaces(center-width(config.width trimmed)))$trimmed"
+    else: "$prefix$(spaces(indent))$text"
+
+defn finish-slide(text config flags):
+  trimmed =: trim-slide(text)
+  centered =: center-headings(trimmed config.width)
+  finished =:
+    if flags.undent == nil:
+      then: centered
+      else:
+        centered.replace(
+          re-pattern("(?m)^.{$(flags.undent)}") '')
+  before =: N(config.before || 1)
+  newline =: "\n"
+  padding =: newline.repeat(before).join('')
+  =>: "$padding$finished"
+
+defn trim-slide(text):
+  clean =: text.replace(/\A\s*\n/ '')
+               .replace(/\n\s*\z/ '')
+               .replace(/(?m)[ ]+$/ '')
+  =>: clean
+
+defn center-headings(text width):
+  centered =:
+    text.replace(
+      /(?m)^\s*==\s+(.*?)\s*$/
+      \(center-heading(_ width)))
+  =>: centered
+
+defn center-heading(match width):
+  heading =: match.1
+  =>: "$(spaces(center-width(width heading)))$heading"
+
+defn center-width(width text):
+  count =: max(0 quot((N(width) - text.#), 2))
+  =>: count
+
+defn spaces(count):
+  space =: ' '
+  result =: space.repeat(count).join('')
+  =>: result
+
+defn page-html(config slides count):
+  sections =: slides.map(render-slide).join("\n")
+  title =: html-escape(str(config.title))
+  width =: N(config.width || 80)
+  height =: N(config.height || 24)
+  =>: |
+    <!doctype html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport"
+            content="width=device-width, initial-scale=1">
+      <meta name="theme-color" content="#300a24">
+      <title>$title</title>
+      <style>
+    $(indent-text(page-css(width height) 4))
+      </style>
+    </head>
+    <body>
+      <main aria-live="polite">
+    $(indent-text(sections 4))
+      </main>
+      <aside id="navigation" aria-label="Slideshow controls">
+        Space or click: next · Backspace or ←: previous
+      </aside>
+      <output id="counter" aria-label="Slide number"></output>
+      <script>
+    $(indent-text(page-js(count) 4))
+      </script>
+    </body>
+    </html>
+
+defn indent-text(text count):
+  indented =: text.replace(/(?m)^/ spaces(count))
+  =>: indented
+
+defn render-slide(slide):
+  content =: lines(slide.content).map(render-line).join("\n")
+  number =: slide.number
+  step =: slide.step
+  steps =: slide.steps
+  =>: |
+    <section class="slide" data-slide="$number" data-step="$step"
+             data-steps="$steps" hidden>
+      <pre>$content</pre>
+    </section>
+
+defn render-line(line):
+  class =:
+    cond:
+      trim(line) =~ /^[\$>]\s/: 'command'
+      trim(line).starts?('== '): 'heading'
+      true: ''
+  text =: html-escape(line).replace(URL-RE link-url)
+  if class.!:
+    then: text
+    else: "<span class=\"$class\">$text</span>"
+
+defn link-url(url):
+  =>: |-
+    <a href="$url" target="_blank" rel="noopener">$url</a>
+
+defn html-escape(text):
+  escaped =: text.replace('&' '&amp;')
+                 .replace('<' '&lt;')
+                 .replace('>' '&gt;')
+                 .replace('"' '&quot;')
+  =>: escaped
+
+defn page-css(width height):
+  =>: |
+    :root {
+      color-scheme: dark;
+      --columns: $width;
+      --rows: $height;
+      --background: #300a24;
+      --foreground: #f7f7f7;
+      --command: #d7a900;
+      --link: #35c9ff;
+    }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; }
+    body {
+      overflow: hidden;
+      background: var(--background);
+      color: var(--foreground);
+      font-family: "Ubuntu Mono", "DejaVu Sans Mono", monospace;
+    }
+    main { width: 100%; height: 100%; }
+    .slide {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      place-items: center;
+    }
+    .slide[hidden] { display: none; }
+    pre {
+      width: calc(var(--columns) * 1ch);
+      height: calc(var(--rows) * 1.2em);
+      margin: 0;
+      font: inherit;
+      font-size: min(calc(94vw / var(--columns) * 1.65),
+                     calc(76vh / var(--rows)));
+      line-height: 1.2;
+      white-space: pre;
+    }
+    .command { color: var(--command); }
+    a { color: var(--link); text-decoration: none; }
+    a:hover, a:focus { text-decoration: underline; }
+    #counter {
+      position: fixed;
+      right: 1rem;
+      bottom: .6rem;
+      color: #bdaebb;
+      font: 14px "Ubuntu Mono", monospace;
+    }
+    #navigation {
+      position: fixed;
+      left: 1rem;
+      bottom: .6rem;
+      color: #bdaebb;
+      font: 14px "Ubuntu Mono", monospace;
+    }
+    @media print {
+      body { overflow: visible; }
+      .slide { break-after: page; height: 100vh; }
+      .slide[hidden] { display: grid; }
+      #counter, #navigation { display: none; }
+    }
+
+defn page-js(count):
+  =>: |
+    "use strict";
+    const frames = [...document.querySelectorAll(".slide")];
+    const counter = document.querySelector("#counter");
+    let index = 0;
+
+    function hashFor(frame) {
+      return "#" + frame.dataset.slide + "." +
+        (Number(frame.dataset.step) + 1);
+    }
+
+    function indexFromHash() {
+      const match = location.hash.match(/^#(\d+)\.(\d+)$/);
+      if (!match) return 0;
+      const found = frames.findIndex(frame =>
+        frame.dataset.slide === match[1] &&
+        Number(frame.dataset.step) + 1 === Number(match[2]));
+      return found < 0 ? 0 : found;
+    }
+
+    function show(next, updateHash = true) {
+      index = Math.max(0, Math.min(frames.length + -1, next));
+      frames.forEach((frame, position) => {
+        frame.hidden = position !== index;
+      });
+      const frame = frames[index];
+      counter.value = frame.dataset.slide + " / $count";
+      if (updateHash && location.hash !== hashFor(frame)) {
+        history.replaceState(null, "", hashFor(frame));
+      }
+    }
+
+    function move(amount) { show(index + amount); }
+
+    addEventListener("keydown", event => {
+      const forward = [" ", "Enter", "ArrowRight", "ArrowDown",
+                       "PageDown"];
+      const backward = ["Backspace", "ArrowLeft", "ArrowUp", "PageUp"];
+      if (forward.includes(event.key)) {
+        event["preventDefault"]();
+        move(1);
+      } else if (backward.includes(event.key)) {
+        event["preventDefault"]();
+        move(-1);
+      } else if (event.key === "Home") {
+        event["preventDefault"]();
+        show(0);
+      } else if (event.key === "End") {
+        event["preventDefault"]();
+        show(frames.length + -1);
+      }
+    });
+
+    addEventListener("click", event => {
+      if (event.target.closest("a")) return;
+      move(1);
+    });
+    addEventListener("hashchange", () => show(indexFromHash(), false));
+    show(indexFromHash());

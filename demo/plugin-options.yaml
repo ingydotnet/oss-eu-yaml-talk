@@ -1,0 +1,3 @@
+plugin:
+  parser: reference@v0.2.5
+  json-comments: sanitizer@v0.1.9

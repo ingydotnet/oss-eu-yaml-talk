@@ -1,0 +1,6 @@
+talk:
+	title: Evolving the YAML Family
+	speaker: Ingy döt Net
+	topics:
+		- plugins
+		- compatibility

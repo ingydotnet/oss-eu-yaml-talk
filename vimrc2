@@ -1,0 +1,15 @@
+map q ;
+map qq :qa!<cr><cr><cr>
+map \c :set ft=clojure<cr>
+map \y :set ft=yaml<cr>
+map \m :set ft=markdown<cr>
+map \n :set number<cr>
+map \x :set ft=none<cr>
+
+au BufRead,BufNewFile *.ys set filetype=yaml
+au BufRead,BufNewFile *.yaml set filetype=yaml
+
+" colorscheme desert
+" syntax enable
+" hi Normal ctermbg=16 guibg=#000000
+" hi LineNr ctermbg=16 guibg=#000000

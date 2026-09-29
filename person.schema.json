@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "age",
+    "address",
+    "phone"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 30,
+      "pattern": "^[A-Z][a-z]+ [A-Z][a-z]+$"
+    },
+    "age": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 120
+    },
+    "married": {
+      "type": "boolean",
+      "default": false
+    },
+    "address": {
+      "$ref": "#/$defs/address"
+    },
+    "phone": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^\\+1-[0-9]{3}-[0-9]{3}-[0-9]{4}$"
+        },
+        {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "items": {
+            "type": "string",
+            "pattern": "^\\+1-[0-9]{3}-[0-9]{3}-[0-9]{4}$"
+          }
+        }
+      ]
+    },
+    "attributes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "strength",
+        "dexterity",
+        "wisdom"
+      ],
+      "properties": {
+        "strength": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "dexterity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "wisdom": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10
+        }
+      }
+    }
+  },
+  "$defs": {
+    "address": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "street",
+        "city",
+        "state",
+        "postal code"
+      ],
+      "properties": {
+        "street": {
+          "type": "string",
+          "pattern": "^([0-9]+ )?[A-Z][a-z]+( [A-Z][a-z]+)* (St|Ave|Blvd|Rd|Ln|Dr)\\.?$"
+        },
+        "city": {
+          "type": "string",
+          "pattern": "^[A-Z][a-z]+( [A-Z][a-z]+)*$"
+        },
+        "state": {
+          "type": "string",
+          "pattern": "^[A-Z]{2}$"
+        },
+        "postal code": {
+          "type": "string",
+          "pattern": "^[0-9]{5}(-[0-9]{4})?$"
+        }
+      }
+    }
+  }
+}

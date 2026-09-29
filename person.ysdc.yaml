@@ -1,0 +1,41 @@
+name:
+  .type: +Str
+  .like: ^[A-Z][a-z]+ [A-Z][a-z]+$
+  .size: [3, 30]
+age:
+  .type: +Int
+  .range: [0, 120]
+married?:
+  .type: +Bool
+  .init: false
+address: +address
+phone:
+  .list:
+    .type: +Str
+    .like: ^\+1-[0-9]{3}-[0-9]{3}-[0-9]{4}$
+  .size: [1, 3]
+  .solo: true
+attributes?:
+  strength:
+    .type: +Num
+    .range: [0, 10]
+  dexterity:
+    .type: +Num
+    .range: [0, 10]
+  wisdom:
+    .type: +Num
+    .range: [0, 10]
++address:
+  street:
+    .type: +Str
+    .like: ^([0-9]+ )?[A-Z][a-z]+( [A-Z][a-z]+)* (St|Ave|Blvd|Rd|Ln|Dr)\.?$
+  city:
+    .type: +Str
+    .like: ^[A-Z][a-z]+( [A-Z][a-z]+)*$
+  state:
+    .type: +Str
+    .like: ^[A-Z]{2}$
+  postal code:
+    .type: +Str
+    .like: ^[0-9]{5}(-[0-9]{4})?$
+

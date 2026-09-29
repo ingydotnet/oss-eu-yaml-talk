@@ -1,0 +1,8 @@
+!ys-0:
+
+name:: ENV.USER:uc1
+age::
+  sum: 3 .. 9
+likes: [coffee, cycling, code]
+busy:: reverse('LMAY') == 'YAML'
+

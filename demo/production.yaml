@@ -1,0 +1,2 @@
+replicas: 6
+log-level: warn
