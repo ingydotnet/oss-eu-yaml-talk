@@ -162,7 +162,7 @@ defn trim-slide(text):
 defn center-headings(text width):
   centered =:
     text.replace(
-      /(?m)^\s*==\s+(.*?)\s*$/
+      /(?m)^[ \t]*==[ \t]+(.*?)[ \t]*$/
       \(center-heading(_ width)))
   =>: centered
 

@@ -32,6 +32,10 @@ check(
     'command lines are styled',
 );
 check(
+    $html =~ m{Yes, this is vim!\n[ ]*\n[ ]+[*] Slides},
+    'a blank line follows slide titles',
+);
+check(
     $html =~ m{<a href="https://yaml[.]org/libraries/"[^>]*>},
     'URLs are linked',
 );
