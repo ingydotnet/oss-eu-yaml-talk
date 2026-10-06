@@ -202,7 +202,10 @@ defn page-html(config slides count):
     $(indent-text(sections 4))
       </main>
       <aside id="navigation" aria-label="Slideshow controls">
-        Space or click: next · Backspace or ←: previous
+        <span class="full-navigation">
+          Space or click: next · Backspace or ←: previous
+        </span>
+        <span class="compact-navigation">click: next</span>
       </aside>
       <a id="repository"
          href="https://github.com/ingydotnet/oss-eu-yaml-talk"
@@ -289,6 +292,9 @@ defn page-css(width height):
       background: var(--background);
       color: var(--foreground);
       font-family: "Ubuntu Mono", "DejaVu Sans Mono", monospace;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-user-select: none;
+      user-select: none;
     }
     main { width: 100%; height: 100%; }
     .slide {
@@ -296,6 +302,8 @@ defn page-css(width height):
       height: 100%;
       display: grid;
       place-items: center;
+      cursor: pointer;
+      touch-action: manipulation;
     }
     .slide[hidden] { display: none; }
     pre {
@@ -345,6 +353,27 @@ defn page-css(width height):
     #repository:hover, #repository:focus {
       opacity: 1;
       text-decoration: none;
+    }
+    .compact-navigation { display: none; }
+    @media (max-width: 600px) and (orientation: portrait) {
+      .slide { padding: 1rem 0 3rem; }
+      pre {
+        width: 92vw;
+        height: auto;
+        max-height: calc(100vh - 5rem);
+        overflow-y: auto;
+        overflow-wrap: anywhere;
+        font-size: clamp(12px, 3vw, 15px);
+        white-space: pre-wrap;
+      }
+      #navigation {
+        left: 1rem;
+        transform: none;
+        font-size: 12px;
+      }
+      #counter { font-size: 12px; }
+      #repository, .full-navigation { display: none; }
+      .compact-navigation { display: inline; }
     }
     @media print {
       body { overflow: visible; }
@@ -407,9 +436,11 @@ defn page-js(count):
       }
     });
 
-    addEventListener("click", event => {
+    const tapEvent = "PointerEvent" in window ? "pointerup" : "click";
+    frames.forEach(frame => frame.addEventListener(tapEvent, event => {
       if (event.target.closest("a")) return;
+      if ("button" in event && event.button !== 0) return;
       move(1);
-    });
+    }));
     addEventListener("hashchange", () => show(indexFromHash(), false));
     show(indexFromHash());

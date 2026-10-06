@@ -50,8 +50,12 @@ check(
     'shell syntax is HTML escaped',
 );
 check(
-    $html =~ m{Space or click: next .* Backspace or .*: previous},
+    $html =~ m{Space or click: next .* Backspace or .*: previous}s,
     'navigation instructions are visible',
+);
+check(
+    $html =~ m{<span class="compact-navigation">click: next</span>},
+    'compact navigation instructions are present',
 );
 check(
     index($html, '<a id="repository"') >= 0
@@ -63,9 +67,29 @@ check(
     'GitHub repository link is discreetly positioned',
 );
 check(
-    $html =~ m{if \(event[.]target[.]closest\("a"\)\) return;
-\s+move\(1\);},
-    'ordinary clicks advance the slideshow',
+    index(
+        $html,
+        'const tapEvent = "PointerEvent" in window ? '
+            . '"pointerup" : "click";',
+    ) >= 0,
+    'pointer navigation has a click fallback',
+);
+check(
+    index(
+        $html,
+        'frames.forEach(frame => frame.addEventListener(tapEvent,',
+    ) >= 0,
+    'tap navigation is attached directly to slides',
+);
+check(
+    index($html, '@media (max-width: 600px)') >= 0
+        && index($html, 'and (orientation: portrait)') >= 0
+        && index($html, 'font-size: clamp(12px, 3vw, 15px);') >= 0,
+    'portrait mode uses readable slide text',
+);
+check(
+    $html =~ m{user-select: none;.*?touch-action: manipulation;}s,
+    'rapid taps do not select slide text',
 );
 check(
     $html !~ m{\(\\[*] \\space},
