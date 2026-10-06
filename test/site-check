@@ -8,6 +8,12 @@ open my $fh, '<:encoding(UTF-8)', $file
 local $/;
 my $html = <$fh>;
 close $fh or die "Can't close '$file': $!\n";
+my $repository = 'https://github.com/ingydotnet/oss-eu-yaml-talk';
+my $repository_style = qr!
+    [#]repository \s+ \{
+    [^}]* left: \s+ 1rem;
+    [^}]* opacity: \s+ [. ]55;
+!x;
 
 sub check {
     my ($condition, $message) = @_;
@@ -46,6 +52,15 @@ check(
 check(
     $html =~ m{Space or click: next .* Backspace or .*: previous},
     'navigation instructions are visible',
+);
+check(
+    index($html, '<a id="repository"') >= 0
+        && index($html, qq{href="$repository"}) >= 0,
+    'GitHub repository link is present',
+);
+check(
+    scalar($html =~ $repository_style),
+    'GitHub repository link is discreetly positioned',
 );
 check(
     $html =~ m{if \(event[.]target[.]closest\("a"\)\) return;
