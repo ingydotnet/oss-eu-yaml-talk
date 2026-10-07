@@ -346,6 +346,22 @@ $ ys -c hello.ys
 $ ys -c -d hello.ys  # The sausage factory!
 
 ----
+== The YAMLScript AI Skill
+
+* Agents can write YS very well
+* The YS Skill produces idiomatic YS
+* I use it a lot. Never fails
+
+* Our talk slides
+  * https://github.com/ingydotnet/oss-eu-yaml-talk/tree/main/slides.vroom#L29
+
+* I asked GPT to write a YS program
+  * Turn the slides.vroom file into a website
+  * https://ingydotnet.github.io/oss-eu-yaml-talk/
+  * https://github.com/ingydotnet/oss-eu-yaml-talk/blob/main/util/vroom-to-html.ys
+  * https://ingy.net
+
+----
 == Introducing YAMLSchema
 
 * YAML has always needed a schema language
@@ -498,7 +514,6 @@ $ <<<'a: [ok, 1, 2.3, true, null]' go-yaml -J
 
 * JSON-Comments - support JSONC C-style comments in YAML
   * Support loading YAML with /* comment */ and // comment
-  * User requested https://github.com/yaml/yamlstar/issues/7
   * Usefulness is Unknown!
 
 ---- skip
@@ -520,9 +535,12 @@ $ <<<'a: [ok, 1, 2.3, true, null]' go-yaml -J
 * Published as Go code repos w/ shared lib releases
 
 ----
-== A Demo of the "JSON-Comments" Plugin
+== The YAML Family Plugin APIs
 
-  Let's start with an experimental plugin
+Let's Demo some real YAML Plugins!
+
+----
+== A Demo of the "JSON-Comments" Plugin
 
 * YAML uses # for comments.
 * JSONC added C-style comments
@@ -577,13 +595,6 @@ $ go-yaml -J tab-indent.yaml
 > make -C go-yaml cli PLUGIN=tab-indent
 $ go-yaml --plugin=tab-indent -J tab-indent.yaml
 
-----
-== Tab-Indent Plugin
-
-  Dump with tabs too:
-$ go-yaml --plugin=tab-indent -Y tab-indent.yaml
-$ go-yaml --plugin=tab-indent -Y tab-indent.yaml | perl -pe 's/\t/[TAB]/g'
-
   The same plugin in YAMLStar:
 $ yaml --plugin=tab-indent -Y tab-indent.yaml
 
@@ -601,7 +612,7 @@ $ yaml --plugin=tab-indent -Y tab-indent.yaml
 ----
 == Demo of the YAML-Parser Plugin: "reference"
 
-* https://play.yaml.com/?show=gdhflLnJPpxHUrsS#Og==
+* https://play.yaml.com/?show=gdhflLnJPpxHUrsS#OiBmb28=
 
   The native go-yaml parser:
 $ <<<': foo' go-yaml -Y
