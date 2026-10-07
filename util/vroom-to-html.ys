@@ -189,7 +189,13 @@ defn page-html(config slides count):
         <span class="full-navigation">
           Space or click: next · Backspace or ←: previous
         </span>
-        <span class="compact-navigation">click: next</span>
+        <span class="compact-navigation">
+          click: next
+          <button id="previous" type="button"
+                  aria-label="Previous slide" title="Previous slide">
+            [back]
+          </button>
+        </span>
       </aside>
       <a id="repository"
          href="https://github.com/ingydotnet/oss-eu-yaml-talk"
@@ -339,6 +345,21 @@ defn page-css(width height):
       font: 14px "Ubuntu Mono", monospace;
       white-space: nowrap;
     }
+    #previous {
+      display: none;
+      min-width: 44px;
+      min-height: 44px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+      opacity: .8;
+    }
+    #previous:disabled { cursor: default; opacity: .25; }
+    #previous:not(:disabled):hover,
+    #previous:not(:disabled):focus { opacity: 1; }
     #repository {
       position: fixed;
       left: 1rem;
@@ -358,7 +379,33 @@ defn page-css(width height):
       opacity: 1;
       text-decoration: none;
     }
-    .compact-navigation { display: none; }
+    .compact-navigation {
+      display: none;
+      position: relative;
+    }
+    @media (max-width: 600px),
+           (hover: none) and (pointer: coarse) and (max-width: 1000px) {
+      .slide { padding-bottom: 3rem; }
+      #navigation {
+        left: 1rem;
+        transform: none;
+        font-size: 12px;
+      }
+      #counter { font-size: 12px; }
+      #repository, .full-navigation { display: none; }
+      #previous {
+        display: inline-flex;
+        position: absolute;
+        left: calc(100% + .5rem);
+        bottom: -.6rem;
+        align-items: flex-end;
+        padding-bottom: .6rem;
+        box-sizing: border-box;
+      }
+      .compact-navigation {
+        display: inline-block;
+      }
+    }
     @media (max-width: 600px) and (orientation: portrait) {
       .slide { padding: 1rem 0 3rem; }
       pre {
@@ -370,20 +417,12 @@ defn page-css(width height):
         font-size: clamp(12px, 3vw, 15px);
         white-space: pre-wrap;
       }
-      #navigation {
-        left: 1rem;
-        transform: none;
-        font-size: 12px;
-      }
-      #counter { font-size: 12px; }
-      #repository, .full-navigation { display: none; }
-      .compact-navigation { display: inline; }
     }
     @media print {
       body { overflow: visible; }
       .slide { break-after: page; height: 100vh; }
       .slide[hidden] { display: grid; }
-      #counter, #navigation, #repository { display: none; }
+      #counter, #navigation, #repository, #previous { display: none; }
     }
 
 defn page-js(count):
@@ -391,6 +430,7 @@ defn page-js(count):
     "use strict";
     const frames = [...document.querySelectorAll(".slide")];
     const counter = document.querySelector("#counter");
+    const previous = document.querySelector("#previous");
     let index = 0;
 
     function hashFor(frame) {
@@ -414,6 +454,7 @@ defn page-js(count):
       });
       const frame = frames[index];
       counter.value = frame.dataset.slide + " / $count";
+      previous.disabled = index === 0;
       if (updateHash && location.hash !== hashFor(frame)) {
         history.replaceState(null, "", hashFor(frame));
       }
@@ -446,5 +487,10 @@ defn page-js(count):
       if ("button" in event && event.button !== 0) return;
       move(1);
     }));
+    previous.addEventListener("click", event => {
+      event["preventDefault"]();
+      event["stopPropagation"]();
+      move(-1);
+    });
     addEventListener("hashchange", () => show(indexFromHash(), false));
     show(indexFromHash());
