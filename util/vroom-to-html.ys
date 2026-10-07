@@ -8,6 +8,7 @@ use:
 
 BLOCK-RE =: /(?m)^----[ \t]*/
 URL-RE =: /https?:\/\/[^\s<]+/
+CENTER-MARK =: "\uE000"
 
 DEFAULT-CONFIG =::
   title: Vroom Slides
@@ -135,18 +136,16 @@ defn format-line(line config flags indent):
       trimmed =: trim(text)
       if trimmed.!:
         then: prefix
-        else:
-          "$prefix$(spaces(center-width(config.width trimmed)))$trimmed"
+        else: "$prefix$CENTER-MARK$trimmed"
     else: "$prefix$(spaces(indent))$text"
 
 defn finish-slide(text config flags):
   trimmed =: trim-slide(text)
-  centered =: center-headings(trimmed config.width)
   finished =:
     if flags.undent == nil:
-      then: centered
+      then: trimmed
       else:
-        centered.replace(
+        trimmed.replace(
           re-pattern("(?m)^.{$(flags.undent)}") '')
   before =: N(config.before || 1)
   newline =: "\n"
@@ -158,21 +157,6 @@ defn trim-slide(text):
                .replace(/\n\s*\z/ '')
                .replace(/(?m)[ ]+$/ '')
   =>: clean
-
-defn center-headings(text width):
-  centered =:
-    text.replace(
-      /(?m)^[ \t]*==[ \t]+(.*?)[ \t]*$/
-      \(center-heading(_ width)))
-  =>: centered
-
-defn center-heading(match width):
-  heading =: match.1
-  =>: "$(spaces(center-width(width heading)))$heading"
-
-defn center-width(width text):
-  count =: max(0 quot((N(width) - text.#), 2))
-  =>: count
 
 defn spaces(count):
   space =: ' '
@@ -199,7 +183,7 @@ defn page-html(config slides count):
     </head>
     <body>
       <main aria-live="polite">
-    $(indent-text(sections 4))
+    $sections
       </main>
       <aside id="navigation" aria-label="Slideshow controls">
         <span class="full-navigation">
@@ -242,7 +226,7 @@ defn indent-text(text count):
   =>: indented
 
 defn render-slide(slide):
-  content =: lines(slide.content).map(render-line).join("\n")
+  content =: lines(slide.content).map(render-line).join('')
   number =: slide.number
   step =: slide.step
   steps =: slide.steps
@@ -253,15 +237,26 @@ defn render-slide(slide):
     </section>
 
 defn render-line(line):
-  class =:
+  centered =: line.starts?(CENTER-MARK)
+  raw =: if(centered.??, subs(line 1), line)
+  match =: raw =~ /^([ ]*)(.*)$/
+  indent =: match.1.#
+  unindented =: match.2
+  heading =: unindented.starts?('== ')
+  visible =:
+    if heading:
+      then: unindented.replace(/^==\s+/ '')
+      else: unindented
+  kind =:
     cond:
-      trim(line) =~ /^[\$>]\s/: 'command'
-      trim(line).starts?('== '): 'heading'
+      centered: 'centered'
+      heading: 'heading'
+      trim(visible) =~ /^[\$>]\s/: 'command'
       true: ''
-  text =: html-escape(line).replace(URL-RE link-url)
-  if class.!:
-    then: text
-    else: "<span class=\"$class\">$text</span>"
+  classes =: if(kind.!, 'line', "line $kind")
+  text =: html-escape(visible).replace(URL-RE link-url)
+  =>: |-
+    <span class="$classes" style="--indent: $indent">$text</span>
 
 defn link-url(url):
   =>: |-
@@ -316,7 +311,16 @@ defn page-css(width height):
       line-height: 1.2;
       white-space: pre;
     }
+    .line {
+      display: block;
+      min-height: 1.2em;
+      padding-left: calc(var(--indent) * 1ch);
+    }
     .command { color: var(--command); }
+    .heading, .centered {
+      padding-left: 0;
+      text-align: center;
+    }
     a { color: var(--link); text-decoration: none; }
     a:hover, a:focus { text-decoration: underline; }
     #counter {

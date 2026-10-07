@@ -9,6 +9,9 @@ local $/;
 my $html = <$fh>;
 close $fh or die "Can't close '$file': $!\n";
 my $repository = 'https://github.com/ingydotnet/oss-eu-yaml-talk';
+my $slide_heading =
+    '<span class="line heading" style="--indent: 5">'
+    . 'Yes, this is vim!</span>';
 my $repository_style = qr!
     [#]repository \s+ \{
     [^}]* left: \s+ 1rem;
@@ -34,12 +37,33 @@ check(
     'skipped slides are absent',
 );
 check(
-    $html =~ m{<span class="command">.*\$ go-yaml --help</span>},
+    $html =~ m{<span class="line command"[^>]*>.*\$ go-yaml --help</span>},
     'command lines are styled',
 );
 check(
-    $html =~ m{Yes, this is vim!\n[ ]*\n[ ]+[*] Slides},
+    index(
+        $html,
+        $slide_heading
+            . '<span class="line" style="--indent: 0"></span>',
+    ) >= 0,
     'a blank line follows slide titles',
+);
+check(
+    index(
+        $html,
+        '<span class="line centered" style="--indent: 0">'
+            . 'Evolving the YAML Family</span>',
+    ) >= 0,
+    'centered slides do not rely on padding characters',
+);
+check(
+    index(
+        $html,
+        'class="line" style="--indent: 5">'
+            . '* Who has written software that uses a YAML library?'
+            . '</span>',
+    ) >= 0,
+    'wrapped lines retain their terminal indentation',
 );
 check(
     $html =~ m{<a href="https://yaml[.]org/libraries/"[^>]*>},
